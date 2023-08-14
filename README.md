@@ -38,6 +38,8 @@ DragDropBox(
     modifier = Modifier.fillMaxSize(),
     scale = 1.2, // scale size of drag target
     alpha = 0.9, // alpha of drag target
+    defaultDragType = DragType.LongPress, // defaultDragType DragType.LongPress or DragType.Immediate
+    state = rememberDragDropState(scale, alpha, defaultDragType), // all states of the component
 ) {
     // put your content here
 }
@@ -47,6 +49,8 @@ Wrap your `@Composable` content that you want to make draggable with `DragTarget
 ```kotlin
 DragTarget<String>(
     dataToDrop = "dataToDrop",
+    dragType = DragType.Immediate, // Specify a dragType for this one
+                                   // By default,it will be assigned to the defaultDragType you set earlier
 ) {
     // put your draggable content here
 }

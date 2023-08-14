@@ -49,6 +49,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cn.tinyhai.compose.dragdrop.DragDropBox
 import cn.tinyhai.compose.dragdrop.DragTarget
+import cn.tinyhai.compose.dragdrop.DragType
 import cn.tinyhai.compose.dragdrop.DropTarget
 import cn.tinyhai.compose.dragdropdemo.ui.theme.ComposeDragDropTheme
 import kotlinx.coroutines.launch
@@ -120,6 +121,7 @@ fun DragDropDemo() {
         Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
+        defaultDragType = DragType.Immediate,
     ) {
         Column {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {

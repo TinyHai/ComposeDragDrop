@@ -18,9 +18,19 @@ fun DragDropBox(
     modifier: Modifier = Modifier,
     scale: Float = 1.2f,
     alpha: Float = 0.9f,
+    defaultDragType: DragType = DragType.LongPress,
+    state: DragDropState = rememberDragDropState(scale, alpha, defaultDragType),
     content: @Composable BoxScope.() -> Unit
 ) {
-    val state = rememberDragDropState()
+    DragDropBox(state, modifier, content)
+}
+
+@Composable
+fun DragDropBox(
+    state: DragDropState,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
     CompositionLocalProvider(
         LocalDragDrop provides state
     ) {
@@ -40,9 +50,9 @@ fun DragDropBox(
                         .size(targetSizeDp)
                         .graphicsLayer {
                             val offset = state.calculateTargetOffset()
-                            scaleX = scale
-                            scaleY = scale
-                            this.alpha = alpha
+                            scaleX = state.scaleX
+                            scaleY = state.scaleY
+                            this.alpha = state.alpha
                             translationX = offset.x
                             translationY = offset.y
                         },
