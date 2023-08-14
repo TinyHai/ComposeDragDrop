@@ -3,7 +3,7 @@ Android Jetpack Compose DragDrop library
 
 ### Versions
 
-[![Maven Central](https://img.shields.io/maven-central/v/cn.tinyhai.compose/dragdrop.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22cn.tinyhai.compose%22%20AND%20a:%22dragdrop%22)
+[![Maven Central](https://img.shields.io/maven-central/v/cn.tinyhai.compose/dragdrop.svg?label=Maven%20Central)](https://central.sonatype.com/search?q=g%3Acn.tinyhai.compose+a%3Adragdrop)
 ![Compatible with Compose](https://img.shields.io/badge/Compose-BOM%3A2023.08.00-brightgreen)
 
 ## Install
