@@ -51,7 +51,6 @@ fun <T> Modifier.dropTarget(
                 }
             }
         }
-
         onGloballyPositioned {
             dragDropState.boundInBox(it).let { rect ->
                 boundInBox.value = rect

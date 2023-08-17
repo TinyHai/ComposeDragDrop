@@ -38,30 +38,20 @@ fun <T> DragTarget(
                 currentSizePx = it.size
             }
             .pointerInput(currentState, currentOffsetInBox, currentSizePx, dragType) {
-                val onDrag = { change: PointerInputChange, dragAmount: Offset ->
-                    change.consume()
-                    currentState.dragOffset += dragAmount
+                val onDrag = { _: PointerInputChange, dragAmount: Offset ->
+                    currentState.onDrag(dragAmount)
                 }
                 val onDragStart = { offset: Offset ->
-                    currentState.apply {
-                        isDragging = true
-                        this.dataToDrop = dataToDrop
-                        dragStartPosition = currentOffsetInBox + offset
-                        draggableComposition = content
-                        draggableSizePx = currentSizePx
-                    }
-                    Unit
+                    currentState.onDragStart(
+                        dataToDrop,
+                        currentOffsetInBox,
+                        offset,
+                        content,
+                        currentSizePx
+                    )
                 }
                 val onDragEnd = {
-                    currentState.onDrop(
-                        currentState.dragStartPosition + currentState.dragOffset,
-                        currentState.dataToDrop
-                    )
-                    currentState.apply {
-                        isDragging = false
-                        dragOffset = Offset.Zero
-                    }
-                    Unit
+                    currentState.onDragEnd()
                 }
                 when (dragType) {
                     DragType.LongPress -> {

@@ -5,7 +5,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -35,23 +34,25 @@ interface DragTargetInfo {
     var draggableComposition: (@Composable () -> Unit)?
     var draggableSizePx: IntSize
     var dataToDrop: Any?
-    var dragType: DragType
-    var scaleX: Float
-    var scaleY: Float
-    var alpha: Float
+
+    val scaleX: Float
+    val scaleY: Float
+    val alpha: Float
+    val dragType: DragType
 }
 
-private class DragTargetInfoImpl : DragTargetInfo {
+private class DragTargetInfoImpl(
+    override val scaleX: Float,
+    override val scaleY: Float,
+    override val alpha: Float,
+    override val dragType: DragType,
+) : DragTargetInfo {
     override var isDragging by mutableStateOf(false)
     override var dragStartPosition by mutableStateOf(Offset.Zero)
     override var dragOffset by mutableStateOf(Offset.Zero)
     override var draggableComposition by mutableStateOf<(@Composable () -> Unit)?>(null)
     override var draggableSizePx by mutableStateOf(IntSize.Zero)
     override var dataToDrop by mutableStateOf<Any?>(null)
-    override var dragType by mutableStateOf<DragType>(DragType.LongPress)
-    override var scaleX by mutableFloatStateOf(0f)
-    override var scaleY by mutableFloatStateOf(0f)
-    override var alpha by mutableFloatStateOf(0f)
 }
 
 @Composable
@@ -101,21 +102,50 @@ fun <T> RegisterDropTarget(boundInBox: State<Rect?>, onDrop: (T?) -> Unit) {
 }
 
 class DragDropState private constructor(
-    private val dragTargetInfo: DragTargetInfo = DragTargetInfoImpl(),
+    private val dragTargetInfo: DragTargetInfo,
 ) : DragTargetInfo by dragTargetInfo {
 
     private var dragDropBoxCoordinates: LayoutCoordinates? = null
 
     private val dropTargets = hashMapOf<Rect, (Any?) -> Unit>()
 
-    fun attach(layoutCoordinates: LayoutCoordinates) {
+    private fun reset() {
+        isDragging = false
+        dragStartPosition = Offset.Zero
+        dragOffset = Offset.Zero
+        draggableComposition = null
+        draggableSizePx = IntSize.Zero
+        dataToDrop = null
+    }
+
+    internal fun attach(layoutCoordinates: LayoutCoordinates) {
         this.dragDropBoxCoordinates = layoutCoordinates
     }
 
-    fun <T> onDrop(offset: Offset, dataToDrop: T?) {
+    internal fun onDragStart(
+        dataToDrop: Any?,
+        offsetInBox: Offset,
+        dragStartOffset: Offset,
+        content: @Composable () -> Unit,
+        contentSizePx: IntSize
+    ) {
+        isDragging = true
+        this.dataToDrop = dataToDrop
+        dragStartPosition = offsetInBox + dragStartOffset
+        draggableComposition = content
+        draggableSizePx = contentSizePx
+    }
+
+    internal fun onDrag(dragAmount: Offset) {
+        dragOffset += dragAmount
+    }
+
+    internal fun onDragEnd() {
+        val offset = calculateDragPosition()
         val onDrop =
             dropTargets.firstNotNullOfOrNull { if (it.key.contains(offset)) it.value else null }
         onDrop?.invoke(dataToDrop)
+        reset()
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -146,12 +176,7 @@ class DragDropState private constructor(
             alpha: Float,
             dragType: DragType
         ): DragDropState {
-            return DragDropState().apply {
-                this.scaleX = scaleX
-                this.scaleY = scaleY
-                this.alpha = alpha
-                this.dragType = dragType
-            }
+            return DragDropState(DragTargetInfoImpl(scaleX, scaleY, alpha, dragType))
         }
     }
 }
