@@ -148,6 +148,10 @@ class DragDropState private constructor(
         reset()
     }
 
+    internal fun onDragCancel() {
+        reset()
+    }
+
     @Suppress("UNCHECKED_CAST")
     fun <T> registerDropTarget(bound: Rect, onDrop: (T?) -> Unit) {
         dropTargets[bound] = onDrop as (Any?) -> Unit
@@ -157,7 +161,7 @@ class DragDropState private constructor(
         dropTargets.remove(bound)
     }
 
-    fun offsetInBox(dragTargetLayoutCoordinates: LayoutCoordinates): Offset {
+    fun positionInBox(dragTargetLayoutCoordinates: LayoutCoordinates): Offset {
         return dragDropBoxCoordinates!!.localPositionOf(dragTargetLayoutCoordinates, Offset.Zero)
     }
 
@@ -174,9 +178,9 @@ class DragDropState private constructor(
             scaleX: Float,
             scaleY: Float,
             alpha: Float,
-            dragType: DragType
+            defaultDragType: DragType
         ): DragDropState {
-            return DragDropState(DragTargetInfoImpl(scaleX, scaleY, alpha, dragType))
+            return DragDropState(DragTargetInfoImpl(scaleX, scaleY, alpha, defaultDragType))
         }
     }
 }
