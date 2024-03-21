@@ -43,6 +43,18 @@ DragDropBox(
 ) {
     // put your content here
 }
+// or
+YourComposable() {
+    val state = rememberDragDropState(scale, alpha, defaultDragType)
+    CompositionLocalProvider(
+        LocalDragDrop provides state    // necessary
+    ) {
+        Box(modifier = Modifier.attachAsContainer()) {
+            YourInnerComposable()
+            DragDropOverlay() // make sure it above your content
+        }
+    }
+}
 ```
 
 Wrap your `@Composable` content that you want to make draggable with `DragTarget`
@@ -53,6 +65,15 @@ DragTarget<String>(
                                    // By default,it will be assigned to the defaultDragType you set earlier
 ) {
     // put your draggable content here
+}
+// or
+YourComposable() {
+    val draggableComposable = @Composable {
+        // content
+    }
+    Box(modifier = Modifier.dragTarget(enable, dataToDrop, dragType, draggableComposable)) {
+        draggableComposable()
+    }
 }
 ```
 
@@ -65,17 +86,22 @@ DropTarget<String>(
 ) { isInBound, data ->
     // put your droppable content here
 }
+// or
+val state = rememberDropTargetState()
+YourComposable(modifier = Modifier.dropTarget(dropTargetState, enabled, onDrop)) {
+    // content
+}
 ```
 
 After all of above, make sure your content is structured as follows
 ```kotlin
-DragDropBox {
+DragDropBox { // the container
     CustomComposable {
         // make sure both DragTarget and DropTarget are inside DragDropBox
-        DragTarget<Any> {
+        DragTarget<Any> { // or any composable which apply dragTarget Modifier
             // draggable content
         }
-        DropTarget<Any>(onDrop = {}) {
+        DropTarget<Any>(onDrop = {}) { // or any composable which apply dropTarget Modifier
             // droppable content
         }
     }
