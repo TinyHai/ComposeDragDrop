@@ -7,9 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.toSize
+import cn.tinyhai.compose.dragdrop.modifier.attachAsContainer
 
 private const val TAG = "DragDropBox"
 
@@ -35,31 +35,33 @@ fun DragDropBox(
         LocalDragDrop provides state
     ) {
         Box(
-            modifier = modifier.onGloballyPositioned {
-                state.attach(it)
-            },
+            modifier = modifier.attachAsContainer(),
         ) {
             content()
+            DragDropOverlay()
+        }
+    }
+}
 
-            if (state.isDragging) {
-                val targetSizeDp = with(LocalDensity.current) {
-                    state.draggableSizePx.toSize().toDpSize()
-                }
-                Box(
-                    modifier = Modifier
-                        .size(targetSizeDp)
-                        .graphicsLayer {
-                            val offset = state.calculateTargetOffset()
-                            scaleX = state.scaleX
-                            scaleY = state.scaleY
-                            this.alpha = state.alpha
-                            translationX = offset.x
-                            translationY = offset.y
-                        },
-                ) {
-                    state.draggableComposition?.invoke()
-                }
-            }
+@Composable
+fun DragDropOverlay(state: DragDropState = LocalDragDrop.current) {
+    if (state.isDragging) {
+        val targetSizeDp = with(LocalDensity.current) {
+            state.draggableSizePx.toSize().toDpSize()
+        }
+        Box(
+            modifier = Modifier
+                .size(targetSizeDp)
+                .graphicsLayer {
+                    val offset = state.calculateTargetOffset()
+                    scaleX = state.scaleX
+                    scaleY = state.scaleY
+                    this.alpha = state.alpha
+                    translationX = offset.x
+                    translationY = offset.y
+                },
+        ) {
+            state.draggableComposition?.invoke()
         }
     }
 }

@@ -14,6 +14,11 @@ import androidx.compose.ui.unit.IntSize
 import cn.tinyhai.compose.dragdrop.*
 import kotlinx.coroutines.flow.collectLatest
 
+fun Modifier.attachAsContainer() = composed {
+    val state = LocalDragDrop.current
+    this.onGloballyPositioned { state.attach(it) }
+}
+
 @Suppress("UNCHECKED_CAST")
 fun <T> Modifier.dropTarget(
     state: DropTargetState<T>, enabled: Boolean = true, onDrop: (T?) -> Unit
