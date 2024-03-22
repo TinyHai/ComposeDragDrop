@@ -1,7 +1,7 @@
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("com.vanniktech.maven.publish")
+    alias(libs.plugins.agp.lib)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.maven.publish)
 }
 
 android {
@@ -30,7 +30,7 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        kotlinCompilerExtensionVersion = "1.5.2"
     }
 
     compileOptions {
@@ -43,7 +43,7 @@ android {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2023.08.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.foundation:foundation")
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.foundation)
 }
