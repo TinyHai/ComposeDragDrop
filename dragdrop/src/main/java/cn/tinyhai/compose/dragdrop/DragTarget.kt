@@ -30,7 +30,8 @@ fun <T> DragTarget(
                 content
             )
     ) {
-        if (!hiddenOnDragging) {
+        val state = LocalDragDrop.current
+        if (!hiddenOnDragging || !state.isDragging) {
             content()
         }
     }
