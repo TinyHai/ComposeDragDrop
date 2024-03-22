@@ -46,11 +46,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import cn.tinyhai.compose.dragdrop.DragDropBox
-import cn.tinyhai.compose.dragdrop.DragTarget
-import cn.tinyhai.compose.dragdrop.DragType
+import cn.tinyhai.compose.dragdrop.*
 import cn.tinyhai.compose.dragdrop.modifier.dropTarget
-import cn.tinyhai.compose.dragdrop.rememberDropTargetState
 import cn.tinyhai.compose.dragdropdemo.ui.theme.ComposeDragDropTheme
 import kotlinx.coroutines.launch
 
@@ -193,16 +190,16 @@ fun AnimalItemPreview() {
 fun AnimalItem(animal: Animal) {
     val scope = rememberCoroutineScope()
     val snackbarHost = LocalSnackbarHost.current
-    val dropTargetState = rememberDropTargetState<String>()
+    val dropTargetState = rememberDropTargetState<String> {
+        scope.launch {
+            it?.let { food ->
+                snackbarHost.showSnackbar("${animal.name} ate the $food")
+            }
+        }
+    }
     val (isInBound, data) = dropTargetState
     Card(
-        modifier = Modifier.dropTarget(dropTargetState) {
-            scope.launch {
-                it?.let { food ->
-                    snackbarHost.showSnackbar("${animal.name} ate the $food")
-                }
-            }
-        },
+        modifier = Modifier.dropTarget(dropTargetState),
         colors = CardDefaults.cardColors(
             containerColor = if (isInBound) MaterialTheme.colorScheme.surfaceTint else MaterialTheme.colorScheme.surfaceVariant
         )

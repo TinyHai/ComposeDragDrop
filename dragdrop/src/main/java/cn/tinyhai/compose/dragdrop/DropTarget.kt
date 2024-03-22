@@ -2,21 +2,52 @@ package cn.tinyhai.compose.dragdrop
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import cn.tinyhai.compose.dragdrop.modifier.dropTarget
 
 private const val TAG = "DropTarget"
 
-class DropTargetState<T> {
+class DropTargetState<T>(
+    private val onDrop: ((T?) -> Unit)?,
+) {
+    var boundInBox: Rect = Rect.Zero
     var isInBound by mutableStateOf(false)
-        internal set
+        private set
     var dataToDrop by mutableStateOf<T?>(null)
-        internal set
+        private set
+
+    internal val dragDropCallback = object : DragDropCallback<T> {
+        override val isInBound: Boolean
+            get() = this@DropTargetState.isInBound
+
+        override fun onDrag(dragPosition: Offset): Boolean {
+            return boundInBox.contains(dragPosition)
+        }
+
+        override fun onDragOut() {
+            this@DropTargetState.isInBound = false
+            dataToDrop = null
+        }
+
+        override fun onDragIn(dataToDrop: T) {
+            this@DropTargetState.isInBound = true
+            this@DropTargetState.dataToDrop = dataToDrop
+        }
+
+        override fun onDrop(dataToDrop: T) {
+            if (isInBound) {
+                onDrop?.invoke(dataToDrop)
+            }
+        }
+
+        override fun onReset() {
+            this@DropTargetState.isInBound = false
+            dataToDrop = null
+        }
+    }
 
     operator fun component1() = isInBound
 
@@ -28,8 +59,11 @@ class DropTargetState<T> {
 }
 
 @Composable
-fun <T> rememberDropTargetState() = remember {
-    DropTargetState<T>()
+fun <T> rememberDropTargetState(onDrop: (T?) -> Unit): DropTargetState<T> {
+    val curOnDrop by rememberUpdatedState(newValue = onDrop)
+    return remember {
+        DropTargetState { curOnDrop(it) }
+    }
 }
 
 @Composable
@@ -37,10 +71,10 @@ fun <T> DropTarget(
     onDrop: (T?) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    dropTargetState: DropTargetState<T> = rememberDropTargetState(),
+    dropTargetState: DropTargetState<T> = rememberDropTargetState(onDrop),
     content: @Composable BoxScope.(isInBound: Boolean, data: T?) -> Unit
 ) {
-    Box(modifier = modifier.dropTarget(dropTargetState, enabled, onDrop)) {
+    Box(modifier = modifier.dropTarget(dropTargetState, enabled)) {
         content(dropTargetState.isInBound, dropTargetState.dataToDrop)
     }
 }

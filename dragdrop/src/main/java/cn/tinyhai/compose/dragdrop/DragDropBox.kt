@@ -56,7 +56,7 @@ fun DragDropOverlay(state: DragDropState = LocalDragDrop.current) {
                     val offset = state.calculateTargetOffset()
                     scaleX = state.scaleX
                     scaleY = state.scaleY
-                    this.alpha = state.alpha
+                    alpha = state.alpha
                     translationX = offset.x
                     translationY = offset.y
                 },

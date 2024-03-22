@@ -24,10 +24,10 @@ fun <T> DragTarget(
     Box(
         modifier = modifier
             .dragTarget(
-                enable,
-                dataToDrop,
-                dragType,
-                content
+                dataToDrop = dataToDrop,
+                draggableComposable = content,
+                dragType = dragType,
+                enable = enable
             )
     ) {
         val state = LocalDragDrop.current

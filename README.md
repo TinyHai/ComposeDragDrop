@@ -4,7 +4,7 @@ Android Jetpack Compose DragDrop library
 ### Versions
 
 [![Maven Central](https://img.shields.io/maven-central/v/cn.tinyhai.compose/dragdrop.svg?label=Maven%20Central)](https://central.sonatype.com/search?q=g%3Acn.tinyhai.compose+a%3Adragdrop)
-![Compatible with Compose](https://img.shields.io/badge/Compose-BOM%3A2023.08.00-brightgreen)
+![Compatible with Compose](https://img.shields.io/badge/Compose-BOM%3A2024.03.00-brightgreen)
 
 ## Install
 ```kotlin
@@ -87,8 +87,8 @@ DropTarget<String>(
     // put your droppable content here
 }
 // or
-val state = rememberDropTargetState()
-YourComposable(modifier = Modifier.dropTarget(dropTargetState, enabled, onDrop)) {
+val state = rememberDropTargetState(onDrop = { // do something })
+YourComposable(modifier = Modifier.dropTarget(dropTargetState, enabled)) {
     // content
 }
 ```

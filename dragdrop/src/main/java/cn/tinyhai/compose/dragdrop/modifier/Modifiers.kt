@@ -6,73 +6,54 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.IntSize
 import cn.tinyhai.compose.dragdrop.*
-import kotlinx.coroutines.flow.collectLatest
 
 fun Modifier.attachAsContainer() = composed {
     val state = LocalDragDrop.current
     this.onGloballyPositioned { state.attach(it) }
 }
 
-@Suppress("UNCHECKED_CAST")
 fun <T> Modifier.dropTarget(
-    state: DropTargetState<T>, enabled: Boolean = true, onDrop: (T?) -> Unit
+    state: DropTargetState<T>,
+    enable: Boolean = true,
 ) = composed {
-    val isEnabled by rememberUpdatedState(newValue = enabled)
-    val boundInBox = remember {
-        mutableStateOf<Rect?>(null)
-    }
+    if (enable) {
+        RegisterDropTarget(state)
 
-    if (isEnabled) {
-        RegisterDropTarget(boundInBox, onDrop)
-    }
-
-    val dragDropState = LocalDragDrop.current
-    LaunchedEffect(isEnabled) {
-        if (isEnabled) {
-            snapshotFlow {
-                val isInBound =
-                    boundInBox.value?.contains(dragDropState.calculateDragPosition()) ?: false
-                isInBound to (if (isInBound) dragDropState.dataToDrop as? T else null)
-            }.collectLatest { (isInBound, dataToDrop) ->
-                state.apply {
-                    this.isInBound = isInBound
-                    this.dataToDrop = dataToDrop
-                }
-            }
-        } else {
-            state.apply {
-                isInBound = false
-                dataToDrop = null
+        val dragDropState = LocalDragDrop.current
+        onGloballyPositioned {
+            dragDropState.boundInBox(it).let { rect ->
+                state.boundInBox = rect
             }
         }
-    }
-    onGloballyPositioned {
-        dragDropState.boundInBox(it).let { rect ->
-            boundInBox.value = rect
-        }
+    } else {
+        Modifier
     }
 }
 
+@Composable
 fun <T> Modifier.dragTarget(
-    enable: Boolean, dataToDrop: T?, dragType: DragType, draggableComposable: @Composable () -> Unit
+    dataToDrop: T?,
+    draggableComposable: @Composable () -> Unit,
+    dragType: DragType = LocalDragDrop.current.dragType,
+    enable: Boolean = true
 ) = composed {
-    val currentState = LocalDragDrop.current
-    val dragTargetState = rememberUpdatedState(newValue = DragTargetState(dataToDrop, dragType))
-    var currentOffsetInBox by remember {
-        mutableStateOf(Offset.Zero)
-    }
-    var currentSizePx by remember {
-        mutableStateOf(IntSize.Zero)
-    }
     if (!enable) {
         Modifier
     } else {
+        val currentState = LocalDragDrop.current
+        val dragTargetState = rememberUpdatedState(newValue = DragTargetState(dataToDrop, dragType))
+        var currentOffsetInBox by remember {
+            mutableStateOf(Offset.Zero)
+        }
+        var currentSizePx by remember {
+            mutableStateOf(IntSize.Zero)
+        }
+
         this
             .onGloballyPositioned {
                 currentOffsetInBox = currentState.positionInBox(it)
