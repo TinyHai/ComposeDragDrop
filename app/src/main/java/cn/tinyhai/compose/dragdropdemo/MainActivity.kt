@@ -114,7 +114,7 @@ fun DragDropDemo() {
         Animal("dog", R.drawable.dog),
         Animal("sheep", R.drawable.sheep),
     )
-    DragDropBox(
+    AnimatedDragDropBox(
         Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
@@ -154,7 +154,12 @@ fun FoodItem(food: Food) {
                 .fillMaxWidth()
                 .padding(12.dp),
         ) {
-            DragTarget(dataToDrop = food.name, modifier = Modifier.size(80.dp)) {
+            DragTarget(
+                food.name,
+                modifier = Modifier.size(80.dp),
+                hiddenOnDragging = true,
+                uniqueKey = { food.name }
+            ) {
                 Image(
                     painter = painterResource(id = food.resId),
                     contentDescription = food.name,

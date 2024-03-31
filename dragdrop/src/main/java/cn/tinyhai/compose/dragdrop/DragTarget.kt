@@ -17,6 +17,7 @@ fun <T> DragTarget(
     dataToDrop: T?,
     modifier: Modifier = Modifier,
     enable: Boolean = true,
+    uniqueKey: (() -> Any)? = null,
     dragType: DragType = LocalDragDrop.current.dragType,
     hiddenOnDragging: Boolean = false,
     content: @Composable () -> Unit
@@ -25,14 +26,20 @@ fun <T> DragTarget(
         modifier = modifier
             .dragTarget(
                 dataToDrop = dataToDrop,
-                draggableComposable = content,
+                draggableContent = content,
+                enable = enable,
+                uniqueKey = uniqueKey,
                 dragType = dragType,
-                enable = enable
             )
     ) {
         val state = LocalDragDrop.current
-        if (!hiddenOnDragging || !state.isDragging) {
-            content()
+        when {
+            hiddenOnDragging && state.isDragging -> {
+                if (uniqueKey == null || uniqueKey.invoke() != state.targetKey) {
+                    content()
+                }
+            }
+            else -> content()
         }
     }
 }

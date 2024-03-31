@@ -26,7 +26,7 @@ fun <T> Modifier.dropTarget(
 
         val dragDropState = LocalDragDrop.current
         onGloballyPositioned {
-            dragDropState.boundInBox(it).let { rect ->
+            dragDropState.calculateBoundInBox(it).let { rect ->
                 state.boundInBox = rect
             }
         }
@@ -38,15 +38,17 @@ fun <T> Modifier.dropTarget(
 @Composable
 fun <T> Modifier.dragTarget(
     dataToDrop: T?,
-    draggableComposable: @Composable () -> Unit,
+    draggableContent: @Composable () -> Unit,
+    enable: Boolean = true,
+    uniqueKey: (() -> Any)? = null,
     dragType: DragType = LocalDragDrop.current.dragType,
-    enable: Boolean = true
 ) = composed {
     if (!enable) {
         Modifier
     } else {
         val currentState = LocalDragDrop.current
         val dragTargetState = rememberUpdatedState(newValue = DragTargetState(dataToDrop, dragType))
+        val currentUniqueKey = rememberUpdatedState(newValue = uniqueKey)
         var currentOffsetInBox by remember {
             mutableStateOf(Offset.Zero)
         }
@@ -60,15 +62,16 @@ fun <T> Modifier.dragTarget(
                 currentSizePx = it.size
             }
             .pointerInput(currentState, dragTargetState, currentSizePx) {
-                val onDrag = { _: PointerInputChange, dragAmount: Offset ->
-                    currentState.onDrag(dragAmount)
+                val onDrag = { changes: PointerInputChange, dragAmount: Offset ->
+                    currentState.onDrag(changes.position)
                 }
                 val onDragStart = { offset: Offset ->
                     currentState.onDragStart(
+                        currentUniqueKey.value?.invoke(),
                         dragTargetState.value.dataToDrop,
                         currentOffsetInBox,
                         offset,
-                        draggableComposable,
+                        draggableContent,
                         currentSizePx
                     )
                 }

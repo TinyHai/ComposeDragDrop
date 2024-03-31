@@ -1,12 +1,15 @@
 package cn.tinyhai.compose.dragdrop
 
+import androidx.compose.animation.core.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.center
-import androidx.compose.ui.unit.toOffset
+import cn.tinyhai.compose.dragdrop.helper.AnimatedDragDropHelper
+import cn.tinyhai.compose.dragdrop.helper.DragDropHelper
+import cn.tinyhai.compose.dragdrop.helper.SimpleDragDropHelper
+import kotlinx.coroutines.CoroutineScope
 
 private const val TAG = "DragDropState"
 
@@ -17,11 +20,12 @@ sealed interface DragType {
 
 interface DragTargetInfo {
     val isDragging: Boolean
-    val dragStartPosition: Offset
-    val dragOffset: Offset
-    val draggableComposition: (@Composable () -> Unit)?
-    val draggableSizePx: IntSize
+    val dragOffsetInDragTarget: Offset
+    val dragTargetContent: (@Composable () -> Unit)?
+    val dragTargetOffsetInBox: Offset
+    val dragTargetContentSizePx: IntSize
     val dataToDrop: Any?
+    val targetKey: Any?
 
     val scaleX: Float
     val scaleY: Float
@@ -29,32 +33,45 @@ interface DragTargetInfo {
     val dragType: DragType
 }
 
-internal interface DragDropCallback<T> {
-    val isInBound: Boolean
-
-    fun onDrag(dragPosition: Offset): Boolean
-
-    fun onDragIn(dataToDrop: T)
-
-    fun onDragOut()
-
-    fun onDrop(dataToDrop: T)
-
-    fun onReset()
-}
-
-private class DragTargetInfoImpl(
+internal open class SimpleDragTargetInfo(
     override val scaleX: Float,
     override val scaleY: Float,
     override val alpha: Float,
     override val dragType: DragType,
 ) : DragTargetInfo {
     override var isDragging by mutableStateOf(false)
-    override var dragStartPosition by mutableStateOf(Offset.Zero)
-    override var dragOffset by mutableStateOf(Offset.Zero)
-    override var draggableComposition by mutableStateOf<(@Composable () -> Unit)?>(null)
-    override var draggableSizePx by mutableStateOf(IntSize.Zero)
+    override var dragOffsetInDragTarget by mutableStateOf(Offset.Zero)
+    override var dragTargetContent by mutableStateOf<(@Composable () -> Unit)?>(null)
+    override var dragTargetOffsetInBox by mutableStateOf(Offset.Zero)
+    override var dragTargetContentSizePx by mutableStateOf(IntSize.Zero)
     override var dataToDrop by mutableStateOf<Any?>(null)
+    override var targetKey by mutableStateOf<Any?>(null)
+
+    open fun reset() {
+        isDragging = false
+        dragOffsetInDragTarget = Offset.Zero
+        dragTargetContent = null
+        dragTargetOffsetInBox = Offset.Zero
+        dragTargetContentSizePx = IntSize.Zero
+        dataToDrop = null
+        targetKey = null
+    }
+}
+
+internal class AnimatedDragTargetInfo(
+    private val scaleXDelta: Float,
+    private val scaleYDelta: Float,
+    private val alphaDelta: Float,
+    dragType: DragType,
+) : SimpleDragTargetInfo(1f, 1f, 1f, dragType) {
+    var animatableValue by mutableFloatStateOf(0f)
+    override val scaleX get() = animatableValue * scaleXDelta + super.scaleX
+    override val scaleY get() = animatableValue * scaleYDelta + super.scaleY
+    override val alpha get() = animatableValue * alphaDelta + super.alpha
+    override fun reset() {
+        super.reset()
+        animatableValue = 0f
+    }
 }
 
 @Composable
@@ -70,82 +87,82 @@ fun rememberDragDropState(
 }
 
 @Composable
+fun rememberAnimatedDragDropState(
+    scaleX: Float,
+    scaleY: Float,
+    alpha: Float = 0.9f,
+    startSpec: AnimationSpec<Float> = tween(),
+    endSpec: AnimationSpec<Float> = tween(400),
+    defaultDragType: DragType = DragType.LongPress
+): DragDropState {
+    val scope = rememberCoroutineScope()
+    return remember(scaleX, scaleY, alpha, defaultDragType, startSpec, endSpec, scope) {
+        DragDropState(scaleX, scaleY, alpha, defaultDragType, startSpec, endSpec, scope)
+    }
+}
+
+@Composable
 fun rememberDragDropState(
     scale: Float = 1.2f,
     alpha: Float = 0.9f,
+    enableAnimation: Boolean = false,
     dragType: DragType = DragType.LongPress
 ): DragDropState {
-    return rememberDragDropState(scale, scale, alpha, dragType)
+    return if (enableAnimation) {
+        rememberAnimatedDragDropState(scale, scale, alpha, defaultDragType = dragType)
+    } else {
+        rememberDragDropState(scale, scale, alpha, dragType)
+    }
 }
 
 @Composable
 fun RegisterDropTarget(dropTargetState: DropTargetState<*>) {
     val state = LocalDragDrop.current
     DisposableEffect(state, dropTargetState) {
-        val callback = dropTargetState.dragDropCallback
-        state.registerDragDropCallback(callback)
+        state.registerDragDropCallback(dropTargetState)
         onDispose {
-            state.unregisterDropTarget(callback)
+            state.unregisterDropTarget(dropTargetState)
         }
     }
 }
 
 class DragDropState private constructor(
-    private val dragTargetInfo: DragTargetInfoImpl,
-) : DragTargetInfo by dragTargetInfo {
-    override var isDragging: Boolean by dragTargetInfo::isDragging
-        private set
-    override var dragStartPosition: Offset by dragTargetInfo::dragStartPosition
-        private set
-    override var dragOffset: Offset by dragTargetInfo::dragOffset
-        private set
-    override var draggableComposition: @Composable (() -> Unit)? by dragTargetInfo::draggableComposition
-        private set
-    override var draggableSizePx: IntSize by dragTargetInfo::draggableSizePx
-        private set
-    override var dataToDrop: Any? by dragTargetInfo::dataToDrop
-        private set
+    private val state: DragTargetInfo,
+    private val helper: DragDropHelper
+) : DragTargetInfo by state {
 
     private var dragDropBoxCoordinates: LayoutCoordinates? = null
 
-    private val callbacks: MutableList<DragDropCallback<Any?>> = arrayListOf()
-
-    private fun reset() {
-        isDragging = false
-        dragStartPosition = Offset.Zero
-        dragOffset = Offset.Zero
-        draggableComposition = null
-        draggableSizePx = IntSize.Zero
-        dataToDrop = null
-        callbacks.forEach {
-            it.onReset()
-        }
-    }
+    private val callbacks: MutableList<DropTargetCallback<Any?>> = arrayListOf()
 
     internal fun attach(layoutCoordinates: LayoutCoordinates) {
         this.dragDropBoxCoordinates = layoutCoordinates
     }
 
     internal fun onDragStart(
+        dragTargetKey: Any?,
         dataToDrop: Any?,
         offsetInBox: Offset,
         dragStartOffset: Offset,
         content: @Composable () -> Unit,
         contentSizePx: IntSize
     ) {
-        isDragging = true
-        this.dataToDrop = dataToDrop
-        dragStartPosition = offsetInBox + dragStartOffset
-        draggableComposition = content
-        draggableSizePx = contentSizePx
+        helper.handleDragStart(
+            dragTargetKey,
+            dataToDrop,
+            offsetInBox,
+            dragStartOffset,
+            content,
+            contentSizePx
+        )
     }
 
-    internal fun onDrag(dragAmount: Offset) {
-        dragOffset += dragAmount
+    internal fun onDrag(dragOffset: Offset) {
+        helper.handleDrag(dragOffset)
 
         val lastCallback = callbacks.lastOrNull { it.isInBound }
-        val dragPosition = calculateDragPosition()
-        val newCallback = callbacks.lastOrNull { it.onDrag(dragPosition) }
+        val dragPosition = helper.calculateDragPosition()
+        val newCallback = callbacks.lastOrNull { it.contains(dragPosition) }
         if (lastCallback !== newCallback) {
             lastCallback?.onDragOut()
             newCallback?.onDragIn(dataToDrop)
@@ -153,43 +170,69 @@ class DragDropState private constructor(
     }
 
     internal fun onDragEnd() {
-        callbacks.lastOrNull { it.isInBound }?.onDrop(dataToDrop)
+        callbacks.lastOrNull { it.isInBound }?.let {
+            it.onDrop(dataToDrop)
+            helper.handleDragEnd()
+        } ?: helper.handleDragCancel()
         reset()
     }
 
     internal fun onDragCancel() {
+        helper.handleDragCancel()
         reset()
     }
 
     @Suppress("UNCHECKED_CAST")
-    internal fun <T> registerDragDropCallback(dragDropCallback: DragDropCallback<T>) {
-        callbacks.add(dragDropCallback as DragDropCallback<Any?>)
+    internal fun <T> registerDragDropCallback(dragDropCallback: DropTargetCallback<T>) {
+        callbacks.add(dragDropCallback as DropTargetCallback<Any?>)
     }
 
-    internal fun unregisterDropTarget(dragDropCallback: DragDropCallback<*>) {
+    internal fun unregisterDropTarget(dragDropCallback: DropTargetCallback<*>) {
         callbacks.remove(dragDropCallback)
     }
 
-    internal fun positionInBox(dragTargetLayoutCoordinates: LayoutCoordinates): Offset {
-        return dragDropBoxCoordinates!!.localPositionOf(dragTargetLayoutCoordinates, Offset.Zero)
+    fun positionInBox(dragTargetLayoutCoordinates: LayoutCoordinates): Offset {
+        return dragDropBoxCoordinates?.localPositionOf(dragTargetLayoutCoordinates, Offset.Zero)
+            ?: Offset.Unspecified
     }
 
-    internal fun boundInBox(dropTargetLayoutCoordinates: LayoutCoordinates): Rect {
-        return dragDropBoxCoordinates!!.localBoundingBoxOf(dropTargetLayoutCoordinates)
+    fun calculateBoundInBox(dropTargetLayoutCoordinates: LayoutCoordinates): Rect {
+        return dragDropBoxCoordinates?.localBoundingBoxOf(dropTargetLayoutCoordinates) ?: Rect.Zero
     }
 
-    fun calculateTargetOffset() = dragStartPosition + dragOffset - draggableSizePx.center.toOffset()
+    fun currentOverlayOffset() = helper.calculateTargetOffset()
 
-    private fun calculateDragPosition() = dragStartPosition + dragOffset
+    private fun reset() {
+        callbacks.forEach {
+            it.onReset()
+        }
+    }
 
     companion object {
         operator fun invoke(
             scaleX: Float,
             scaleY: Float,
             alpha: Float,
-            defaultDragType: DragType
+            defaultDragType: DragType,
         ): DragDropState {
-            return DragDropState(DragTargetInfoImpl(scaleX, scaleY, alpha, defaultDragType))
+            val state = SimpleDragTargetInfo(scaleX, scaleY, alpha, defaultDragType)
+            val helper = SimpleDragDropHelper(state)
+            return DragDropState(state, helper)
+        }
+
+        operator fun invoke(
+            scaleX: Float,
+            scaleY: Float,
+            alpha: Float,
+            defaultDragType: DragType,
+            startSpec: AnimationSpec<Float>,
+            endSpec: AnimationSpec<Float>,
+            scope: CoroutineScope
+        ): DragDropState {
+            val state =
+                AnimatedDragTargetInfo(scaleX - 1f, scaleY - 1f, alpha - 1f, defaultDragType)
+            val helper = AnimatedDragDropHelper(state, startSpec, endSpec, scope)
+            return DragDropState(state, helper)
         }
     }
 }
