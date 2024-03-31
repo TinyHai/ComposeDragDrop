@@ -10,43 +10,52 @@ import cn.tinyhai.compose.dragdrop.modifier.dropTarget
 
 private const val TAG = "DropTarget"
 
+interface DropTargetCallback<T> {
+    val isInBound: Boolean
+
+    fun contains(dragPosition: Offset): Boolean
+
+    fun onDragIn(dataToDrop: T)
+
+    fun onDragOut()
+
+    fun onDrop(dataToDrop: T)
+
+    fun onReset()
+}
+
 class DropTargetState<T>(
     private val onDrop: ((T?) -> Unit)?,
-) {
+) : DropTargetCallback<T> {
     var boundInBox: Rect = Rect.Zero
-    var isInBound by mutableStateOf(false)
+    override var isInBound by mutableStateOf(false)
         private set
     var dataToDrop by mutableStateOf<T?>(null)
         private set
 
-    internal val dragDropCallback = object : DragDropCallback<T> {
-        override val isInBound: Boolean
-            get() = this@DropTargetState.isInBound
+    override fun contains(dragPosition: Offset): Boolean {
+        return boundInBox.contains(dragPosition)
+    }
 
-        override fun onDrag(dragPosition: Offset): Boolean {
-            return boundInBox.contains(dragPosition)
-        }
+    override fun onDragOut() {
+        isInBound = false
+        this.dataToDrop = null
+    }
 
-        override fun onDragOut() {
-            this@DropTargetState.isInBound = false
-            dataToDrop = null
-        }
+    override fun onReset() {
+        isInBound = false
+        dataToDrop = null
+    }
 
-        override fun onDragIn(dataToDrop: T) {
-            this@DropTargetState.isInBound = true
-            this@DropTargetState.dataToDrop = dataToDrop
+    override fun onDrop(dataToDrop: T) {
+        if (dataToDrop == this.dataToDrop) {
+            onDrop?.invoke(dataToDrop)
         }
+    }
 
-        override fun onDrop(dataToDrop: T) {
-            if (isInBound) {
-                onDrop?.invoke(dataToDrop)
-            }
-        }
-
-        override fun onReset() {
-            this@DropTargetState.isInBound = false
-            dataToDrop = null
-        }
+    override fun onDragIn(dataToDrop: T) {
+        isInBound = true
+        this.dataToDrop = dataToDrop
     }
 
     operator fun component1() = isInBound
