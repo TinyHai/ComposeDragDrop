@@ -30,8 +30,8 @@ implementation 'cn.tinyhai.compose:dragdrop:latest_version'
 ## Demo
 
 |DragDropBox|AnimatedDragDropBox|
-|--|--|
-|![Demo](gifs/demo.gif)|![Demo](gifs/demo_animated.gif)|
+|:-------------------------:|:-------------------------:|
+|<img src="gifs/demo.gif" width="450" />|<img src="gifs/demo_animated.gif" width="450" />|
 
 ## Usage
 
