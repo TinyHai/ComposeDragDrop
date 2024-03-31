@@ -34,26 +34,12 @@ implementation 'cn.tinyhai.compose:dragdrop:latest_version'
 
 Write a `DragDropBox` and put your content inside it
 ```kotlin
-DragDropBox(
-    modifier = Modifier.fillMaxSize(),
-    scale = 1.2, // scale size of drag target
-    alpha = 0.9, // alpha of drag target
-    defaultDragType = DragType.LongPress, // defaultDragType DragType.LongPress or DragType.Immediate
-    state = rememberDragDropState(scale, alpha, defaultDragType), // all states of the component
-) {
+DragDropBox(/* ... */) {
     // put your content here
 }
 // or
-YourComposable() {
-    val state = rememberDragDropState(scale, alpha, defaultDragType)
-    CompositionLocalProvider(
-        LocalDragDrop provides state    // necessary
-    ) {
-        Box(modifier = Modifier.attachAsContainer()) {
-            YourInnerComposable()
-            DragDropOverlay() // make sure it above your content
-        }
-    }
+AnimatedDragDropBox(/* ... */) {
+    // put your content here
 }
 ```
 
@@ -63,17 +49,10 @@ DragTarget<String>(
     dataToDrop = "dataToDrop",
     dragType = DragType.Immediate, // Specify a dragType for this one
                                    // By default,it will be assigned to the defaultDragType you set earlier
+    hiddenOnDragging = true, // if true, content will be hidden when the target is being dragging
+    uniqueKey = { // using when hiddenOnDragging is true }
 ) {
     // put your draggable content here
-}
-// or
-YourComposable() {
-    val draggableComposable = @Composable {
-        // content
-    }
-    Box(modifier = Modifier.dragTarget(enable, dataToDrop, dragType, draggableComposable)) {
-        draggableComposable()
-    }
 }
 ```
 
@@ -86,16 +65,11 @@ DropTarget<String>(
 ) { isInBound, data ->
     // put your droppable content here
 }
-// or
-val state = rememberDropTargetState(onDrop = { // do something })
-YourComposable(modifier = Modifier.dropTarget(dropTargetState, enabled)) {
-    // content
-}
 ```
 
 After all of above, make sure your content is structured as follows
 ```kotlin
-DragDropBox { // the container
+(Animated)DragDropBox { // the container
     CustomComposable {
         // make sure both DragTarget and DropTarget are inside DragDropBox
         DragTarget<Any> { // or any composable which apply dragTarget Modifier
