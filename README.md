@@ -59,7 +59,6 @@ DragTarget<String>(
     dragType = DragType.Immediate, // Specify a dragType for this one
                                    // By default,it will be assigned to the defaultDragType you set earlier
     hiddenOnDragging = true, // if true, content will be hidden when the target is being dragging
-    uniqueKey = { // using when hiddenOnDragging is true }
 ) {
     // put your draggable content here
 }
@@ -74,19 +73,23 @@ DropTarget<String>(
 ) { isInBound, data ->
     // put your droppable content here
 }
+// or
+val state = rememberDropTargetState { dataToDrop ->
+    // do something
+}
+val (isInBound, dataToDrop) = state
+// apply Modifier.dropTarget(state) to your composable
 ```
 
 After all of above, make sure your content is structured as follows
 ```kotlin
 (Animated)DragDropBox { // the container
-    CustomComposable {
-        // make sure both DragTarget and DropTarget are inside DragDropBox
-        DragTarget<Any> { // or any composable which apply dragTarget Modifier
-            // draggable content
-        }
-        DropTarget<Any>(onDrop = {}) { // or any composable which apply dropTarget Modifier
-            // droppable content
-        }
+    // make sure both DragTarget and DropTarget are inside DragDropBox
+    DragTarget<Any> { // or any composable which apply dragTarget Modifier
+        // draggable content
+    }
+    DropTarget<Any>(onDrop = {}) { // or any composable which apply dropTarget Modifier
+        // droppable content
     }
 }
 ```
