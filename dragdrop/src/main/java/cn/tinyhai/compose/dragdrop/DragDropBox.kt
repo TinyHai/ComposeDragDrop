@@ -65,7 +65,7 @@ fun DragDropBox(
 fun DragDropOverlay(state: DragDropState = LocalDragDrop.current) {
     if (state.isDragging) {
         val targetSizeDp = with(LocalDensity.current) {
-            state.dragTargetContentSizePx.toSize().toDpSize()
+            state.dragTargetBoundInBox.size.toDpSize()
         }
         Box(
             modifier = Modifier

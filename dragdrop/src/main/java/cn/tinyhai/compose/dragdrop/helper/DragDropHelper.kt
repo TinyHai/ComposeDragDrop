@@ -1,5 +1,6 @@
 package cn.tinyhai.compose.dragdrop.helper
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationEndReason
 import androidx.compose.animation.core.AnimationSpec
@@ -7,9 +8,8 @@ import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.center
-import androidx.compose.ui.unit.toOffset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.center
 import cn.tinyhai.compose.dragdrop.AnimatedDragTargetInfo
 import cn.tinyhai.compose.dragdrop.SimpleDragTargetInfo
 import kotlinx.coroutines.CoroutineScope
@@ -20,18 +20,16 @@ private const val TAG = "DragDropHelper"
 
 interface DragDropHelper {
     fun handleDragStart(
-        dragTargetKey: Any?,
         dataToDrop: Any?,
-        offsetInBox: Offset,
         dragStartOffset: Offset,
-        content: @Composable () -> Unit,
-        contentSizePx: IntSize
+        dragTargetBoundInBox: Rect,
+        content: @Composable () -> Unit
     )
     fun handleDrag(dragOffset: Offset)
     fun handleDragEnd()
-    fun handleDragCancel()
+    fun handleDragCancel(reset: () -> Unit)
     fun calculateTargetOffset(): Offset
-    fun calculateDragPosition(): Offset
+    fun currentDragOffset(): Offset
 }
 
 internal open class SimpleDragDropHelper(
@@ -39,42 +37,39 @@ internal open class SimpleDragDropHelper(
 ) : DragDropHelper {
 
     override fun handleDragStart(
-        dragTargetKey: Any?,
         dataToDrop: Any?,
-        offsetInBox: Offset,
         dragStartOffset: Offset,
-        content: @Composable () -> Unit,
-        contentSizePx: IntSize
+        dragTargetBoundInBox: Rect,
+        content: @Composable () -> Unit
     ) {
         state.apply {
             isDragging = true
+            dragOffset = dragStartOffset
             this.dataToDrop = dataToDrop
-            targetKey = dragTargetKey
             dragTargetContent = content
-            dragTargetOffsetInBox = offsetInBox
-            dragTargetContentSizePx = contentSizePx
-            dragOffsetInDragTarget = dragStartOffset
+            this.dragTargetBoundInBox = dragTargetBoundInBox
         }
     }
 
     override fun handleDrag(dragOffset: Offset) {
-        state.dragOffsetInDragTarget = dragOffset
+        state.dragOffset = dragOffset
     }
 
     override fun handleDragEnd() {
         reset()
     }
 
-    override fun handleDragCancel() {
+    override fun handleDragCancel(reset: () -> Unit) {
+        this.reset()
         reset()
     }
 
     override fun calculateTargetOffset(): Offset {
-        return calculateDragPosition() - state.dragTargetContentSizePx.center.toOffset()
+        return currentDragOffset() - state.dragTargetBoundInBox.size.center
     }
 
-    override fun calculateDragPosition(): Offset {
-        return state.dragTargetOffsetInBox + state.dragOffsetInDragTarget
+    override fun currentDragOffset(): Offset {
+        return state.dragOffset
     }
 
     private fun reset() {
@@ -129,15 +124,13 @@ internal class AnimatedDragDropHelper(
     }
 
     override fun handleDragStart(
-        dragTargetKey: Any?,
         dataToDrop: Any?,
-        offsetInBox: Offset,
         dragStartOffset: Offset,
-        content: @Composable () -> Unit,
-        contentSizePx: IntSize
+        dragTargetBoundInBox: Rect,
+        content: @Composable () -> Unit
     ) {
-        stopAnimation(false)
-        super.handleDragStart(dragTargetKey, dataToDrop, offsetInBox, dragStartOffset, content, contentSizePx)
+        stopAnimation(false) // when we drag the same dragTarget, just stop it but dont snap to zero
+        super.handleDragStart(dataToDrop, dragStartOffset, dragTargetBoundInBox, content)
         startDragStartAnimation()
     }
 
@@ -146,16 +139,17 @@ internal class AnimatedDragDropHelper(
         super.handleDragEnd()
     }
 
-    override fun handleDragCancel() {
+    override fun handleDragCancel(reset: () -> Unit) {
         startDragCancelAnimation {
-            super.handleDragCancel()
+            super.handleDragCancel(reset)
         }
     }
 
     override fun calculateTargetOffset(): Offset {
         if (animatable.isRunning) {
-            val offset = super.calculateTargetOffset() - state.dragTargetOffsetInBox
-            return state.dragTargetOffsetInBox + offset * currentAnimatedValue()
+            val offset = super.calculateTargetOffset() - state.dragTargetBoundInBox.topLeft
+            Log.d(TAG, offset.toString())
+            return state.dragTargetBoundInBox.topLeft + offset * currentAnimatedValue()
         }
         return super.calculateTargetOffset()
     }

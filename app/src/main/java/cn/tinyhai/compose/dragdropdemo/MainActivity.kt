@@ -158,7 +158,6 @@ fun FoodItem(food: Food) {
                 food.name,
                 modifier = Modifier.size(80.dp),
                 hiddenOnDragging = true,
-                uniqueKey = { food.name }
             ) {
                 Image(
                     painter = painterResource(id = food.resId),

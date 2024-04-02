@@ -2,19 +2,42 @@ package cn.tinyhai.compose.dragdrop.modifier
 
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.unit.IntSize
 import cn.tinyhai.compose.dragdrop.*
+
+private const val TAG = "Modifiers"
 
 fun Modifier.attachAsContainer() = composed {
     val state = LocalDragDrop.current
-    this.onGloballyPositioned { state.attach(it) }
+    this
+        .onGloballyPositioned { state.attach(it) }
+        .nestedScroll(state.nestedScrollConnection)
+        .pointerInput(state) {
+            when (state.dragType) {
+                DragType.LongPress -> {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = state::onDragStart,
+                        onDrag = { change, _ -> state.onDrag(change.position) },
+                        onDragEnd = state::onDragEnd,
+                        onDragCancel = state::onDragCancel
+                    )
+                }
+
+                DragType.Immediate -> {
+                    detectDragGestures(
+                        onDragStart = state::onDragStart,
+                        onDrag = { change, _ -> state.onDrag(change.position) },
+                        onDragEnd = state::onDragEnd,
+                        onDragCancel = state::onDragCancel
+                    )
+                }
+            }
+        }
 }
 
 fun <T> Modifier.dropTarget(
@@ -22,14 +45,13 @@ fun <T> Modifier.dropTarget(
     enable: Boolean = true,
 ) = composed {
     if (enable) {
+        val dragDropState = LocalDragDrop.current
         RegisterDropTarget(state)
 
-        val dragDropState = LocalDragDrop.current
-        onGloballyPositioned {
-            dragDropState.calculateBoundInBox(it).let { rect ->
-                state.boundInBox = rect
+        this
+            .onGloballyPositioned {
+                state.boundInBox = dragDropState.calculateBoundInBox(it)
             }
-        }
     } else {
         Modifier
     }
@@ -37,69 +59,18 @@ fun <T> Modifier.dropTarget(
 
 @Composable
 fun <T> Modifier.dragTarget(
-    dataToDrop: T?,
-    draggableContent: @Composable () -> Unit,
+    state: DragTargetState<T>,
     enable: Boolean = true,
-    uniqueKey: (() -> Any)? = null,
-    dragType: DragType = LocalDragDrop.current.dragType,
 ) = composed {
     if (!enable) {
         Modifier
     } else {
-        val currentState = LocalDragDrop.current
-        val dragTargetState = rememberUpdatedState(newValue = DragTargetState(dataToDrop, dragType))
-        val currentUniqueKey = rememberUpdatedState(newValue = uniqueKey)
-        var currentOffsetInBox by remember {
-            mutableStateOf(Offset.Zero)
-        }
-        var currentSizePx by remember {
-            mutableStateOf(IntSize.Zero)
-        }
+        val dragDropState = LocalDragDrop.current
+        RegisterDragTarget(dragTargetState = state)
 
         this
             .onGloballyPositioned {
-                currentOffsetInBox = currentState.positionInBox(it)
-                currentSizePx = it.size
-            }
-            .pointerInput(currentState, dragTargetState, currentSizePx) {
-                val onDrag = { changes: PointerInputChange, dragAmount: Offset ->
-                    currentState.onDrag(changes.position)
-                }
-                val onDragStart = { offset: Offset ->
-                    currentState.onDragStart(
-                        currentUniqueKey.value?.invoke(),
-                        dragTargetState.value.dataToDrop,
-                        currentOffsetInBox,
-                        offset,
-                        draggableContent,
-                        currentSizePx
-                    )
-                }
-                val onDragEnd = {
-                    currentState.onDragEnd()
-                }
-                val onDragCancel = {
-                    currentState.onDragCancel()
-                }
-                when (dragTargetState.value.dragType) {
-                    DragType.LongPress -> {
-                        detectDragGesturesAfterLongPress(
-                            onDrag = onDrag,
-                            onDragStart = onDragStart,
-                            onDragEnd = onDragEnd,
-                            onDragCancel = onDragCancel,
-                        )
-                    }
-
-                    DragType.Immediate -> {
-                        detectDragGestures(
-                            onDrag = onDrag,
-                            onDragStart = onDragStart,
-                            onDragEnd = onDragEnd,
-                            onDragCancel = onDragCancel
-                        )
-                    }
-                }
+                state.boundInBox = dragDropState.calculateBoundInBox(it, clipBounds = false)
             }
     }
 }

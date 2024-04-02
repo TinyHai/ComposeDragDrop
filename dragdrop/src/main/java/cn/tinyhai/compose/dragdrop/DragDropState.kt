@@ -1,14 +1,18 @@
 package cn.tinyhai.compose.dragdrop
 
+import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Velocity
 import cn.tinyhai.compose.dragdrop.helper.AnimatedDragDropHelper
 import cn.tinyhai.compose.dragdrop.helper.DragDropHelper
 import cn.tinyhai.compose.dragdrop.helper.SimpleDragDropHelper
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 
 private const val TAG = "DragDropState"
@@ -19,13 +23,14 @@ sealed interface DragType {
 }
 
 interface DragTargetInfo {
+    // set to true when dragTarget is dragging, set to false when drag end or cancel.
+    // it must be true while animation is running
     val isDragging: Boolean
-    val dragOffsetInDragTarget: Offset
+    // the dragOffset in DragDropBox
+    val dragOffset: Offset
     val dragTargetContent: (@Composable () -> Unit)?
-    val dragTargetOffsetInBox: Offset
-    val dragTargetContentSizePx: IntSize
+    val dragTargetBoundInBox: Rect
     val dataToDrop: Any?
-    val targetKey: Any?
 
     val scaleX: Float
     val scaleY: Float
@@ -40,21 +45,17 @@ internal open class SimpleDragTargetInfo(
     override val dragType: DragType,
 ) : DragTargetInfo {
     override var isDragging by mutableStateOf(false)
-    override var dragOffsetInDragTarget by mutableStateOf(Offset.Zero)
+    override var dragOffset by mutableStateOf(Offset.Zero)
+    override var dragTargetBoundInBox by mutableStateOf(Rect.Zero)
     override var dragTargetContent by mutableStateOf<(@Composable () -> Unit)?>(null)
-    override var dragTargetOffsetInBox by mutableStateOf(Offset.Zero)
-    override var dragTargetContentSizePx by mutableStateOf(IntSize.Zero)
     override var dataToDrop by mutableStateOf<Any?>(null)
-    override var targetKey by mutableStateOf<Any?>(null)
 
     open fun reset() {
         isDragging = false
-        dragOffsetInDragTarget = Offset.Zero
+        dragOffset = Offset.Zero
+        dragTargetBoundInBox = Rect.Zero
         dragTargetContent = null
-        dragTargetOffsetInBox = Offset.Zero
-        dragTargetContentSizePx = IntSize.Zero
         dataToDrop = null
-        targetKey = null
     }
 }
 
@@ -119,9 +120,20 @@ fun rememberDragDropState(
 fun RegisterDropTarget(dropTargetState: DropTargetState<*>) {
     val state = LocalDragDrop.current
     DisposableEffect(state, dropTargetState) {
-        state.registerDragDropCallback(dropTargetState)
+        state.registerDropTargetCallback(dropTargetState)
         onDispose {
             state.unregisterDropTarget(dropTargetState)
+        }
+    }
+}
+
+@Composable
+fun RegisterDragTarget(dragTargetState: DragTargetState<*>) {
+    val state = LocalDragDrop.current
+    DisposableEffect(state, dragTargetState) {
+        state.registerDragTarget(dragTargetState)
+        onDispose {
+            state.unregisterDragTarget(dragTargetState)
         }
     }
 }
@@ -133,36 +145,49 @@ class DragDropState private constructor(
 
     private var dragDropBoxCoordinates: LayoutCoordinates? = null
 
-    private val callbacks: MutableList<DropTargetCallback<Any?>> = arrayListOf()
+    private val dropTargetCallbacks: MutableList<DropTargetCallback<Any?>> = arrayListOf()
+    private val dragTargetCallbacks: MutableList<DragTargetCallback<Any?>> = arrayListOf()
+
+    private var tmpDragTarget: DragTargetCallback<Any?>? = null
+
+    internal val nestedScrollConnection = object : NestedScrollConnection {
+        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            return if (isDragging || tmpDragTarget != null) available else Offset.Zero
+        }
+
+        override suspend fun onPreFling(available: Velocity): Velocity {
+            return if (isDragging || tmpDragTarget != null) available else Velocity.Zero
+        }
+    }
 
     internal fun attach(layoutCoordinates: LayoutCoordinates) {
         this.dragDropBoxCoordinates = layoutCoordinates
     }
 
     internal fun onDragStart(
-        dragTargetKey: Any?,
-        dataToDrop: Any?,
-        offsetInBox: Offset,
-        dragStartOffset: Offset,
-        content: @Composable () -> Unit,
-        contentSizePx: IntSize
+        dragStartOffset: Offset
     ) {
+        val dragTarget = dragTargetCallbacks.firstOrNull { it.contains(dragStartOffset) }
+            ?: throw CancellationException("drag cancel because of no dragTarget contains $dragStartOffset")
+        if (tmpDragTarget != null && dragTarget != tmpDragTarget) {
+            throw CancellationException("drag cancel because of trying to drag a different dragTarget during dragging")
+        }
+        tmpDragTarget = dragTarget
         helper.handleDragStart(
-            dragTargetKey,
-            dataToDrop,
-            offsetInBox,
+            dragTarget.dataToDrop,
             dragStartOffset,
-            content,
-            contentSizePx
+            dragTarget.boundInBox,
+            dragTarget.content
         )
+        dragTarget.onDragStart()
     }
 
     internal fun onDrag(dragOffset: Offset) {
         helper.handleDrag(dragOffset)
 
-        val lastCallback = callbacks.lastOrNull { it.isInBound }
-        val dragPosition = helper.calculateDragPosition()
-        val newCallback = callbacks.lastOrNull { it.contains(dragPosition) }
+        val lastCallback = dropTargetCallbacks.lastOrNull { it.isInBound }
+        val dragPosition = helper.currentDragOffset()
+        val newCallback = dropTargetCallbacks.lastOrNull { it.contains(dragPosition) }
         if (lastCallback !== newCallback) {
             lastCallback?.onDragOut()
             newCallback?.onDragIn(dataToDrop)
@@ -170,40 +195,52 @@ class DragDropState private constructor(
     }
 
     internal fun onDragEnd() {
-        callbacks.lastOrNull { it.isInBound }?.let {
+        dropTargetCallbacks.lastOrNull { it.isInBound }?.let {
             it.onDrop(dataToDrop)
             helper.handleDragEnd()
-        } ?: helper.handleDragCancel()
+        } ?: return onDragCancel()
+
         reset()
     }
 
     internal fun onDragCancel() {
-        helper.handleDragCancel()
-        reset()
+        helper.handleDragCancel(::reset)
     }
 
     @Suppress("UNCHECKED_CAST")
-    internal fun <T> registerDragDropCallback(dragDropCallback: DropTargetCallback<T>) {
-        callbacks.add(dragDropCallback as DropTargetCallback<Any?>)
+    internal fun registerDropTargetCallback(dropTargetCallback: DropTargetCallback<*>) {
+        dropTargetCallbacks.add(dropTargetCallback as DropTargetCallback<Any?>)
     }
 
-    internal fun unregisterDropTarget(dragDropCallback: DropTargetCallback<*>) {
-        callbacks.remove(dragDropCallback)
+    internal fun unregisterDropTarget(dropTargetCallback: DropTargetCallback<*>) {
+        dropTargetCallbacks.remove(dropTargetCallback)
     }
 
-    fun positionInBox(dragTargetLayoutCoordinates: LayoutCoordinates): Offset {
-        return dragDropBoxCoordinates?.localPositionOf(dragTargetLayoutCoordinates, Offset.Zero)
-            ?: Offset.Unspecified
+    @Suppress("UNCHECKED_CAST")
+    internal fun registerDragTarget(dragTargetCallback: DragTargetCallback<*>) {
+        dragTargetCallbacks.add(dragTargetCallback as DragTargetCallback<Any?>)
     }
 
-    fun calculateBoundInBox(dropTargetLayoutCoordinates: LayoutCoordinates): Rect {
-        return dragDropBoxCoordinates?.localBoundingBoxOf(dropTargetLayoutCoordinates) ?: Rect.Zero
+    internal fun unregisterDragTarget(dragTargetCallback: DragTargetCallback<*>) {
+        dragTargetCallbacks.remove(dragTargetCallback)
+    }
+
+    fun calculateBoundInBox(
+        layoutCoordinates: LayoutCoordinates,
+        clipBounds: Boolean = true
+    ): Rect {
+        return dragDropBoxCoordinates?.localBoundingBoxOf(layoutCoordinates, clipBounds)
+            ?: Rect.Zero
     }
 
     fun currentOverlayOffset() = helper.calculateTargetOffset()
 
     private fun reset() {
-        callbacks.forEach {
+        tmpDragTarget = null
+        dragTargetCallbacks.forEach {
+            it.onReset()
+        }
+        dropTargetCallbacks.forEach {
             it.onReset()
         }
     }
