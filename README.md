@@ -26,6 +26,12 @@ For groovy
 ```groovy
 implementation 'cn.tinyhai.compose:dragdrop:latest_version'
 ```
+## For some reason, my publication can't sync to maven central for now. if you want to try the newest feature, you could import via jitpack snapshot. As follow:
+
+## Jitpack
+
+https://jitpack.io/#TinyHai/ComposeDragDrop
+
 
 ## Demo
 
