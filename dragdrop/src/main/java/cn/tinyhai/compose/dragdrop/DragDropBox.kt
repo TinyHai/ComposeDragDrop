@@ -2,17 +2,18 @@ package cn.tinyhai.compose.dragdrop
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.round
-import androidx.compose.ui.unit.toSize
 import cn.tinyhai.compose.dragdrop.modifier.attachAsContainer
 
 private const val TAG = "DragDropBox"
@@ -37,9 +38,16 @@ fun AnimatedDragDropBox(
     startSpec: AnimationSpec<Float> = tween(),
     endSpec: AnimationSpec<Float> = tween(400),
     defaultDragType: DragType = DragType.LongPress,
-    state: DragDropState = rememberAnimatedDragDropState(scale, scale, alpha, startSpec, endSpec, defaultDragType),
     content: @Composable BoxScope.() -> Unit
 ) {
+    val state = rememberAnimatedDragDropState(
+        scale,
+        scale,
+        alpha,
+        startSpec,
+        endSpec,
+        defaultDragType
+    )
     DragDropBox(state, modifier, content)
 }
 
@@ -63,13 +71,9 @@ fun DragDropBox(
 
 @Composable
 fun DragDropOverlay(state: DragDropState = LocalDragDrop.current) {
-    if (state.isDragging) {
-        val targetSizeDp = with(LocalDensity.current) {
-            state.dragTargetBoundInBox.size.toDpSize()
-        }
-        Box(
+    if (state.isActive) {
+        Canvas(
             modifier = Modifier
-                .size(targetSizeDp)
                 .absoluteOffset {
                     state
                         .currentOverlayOffset()
@@ -81,7 +85,7 @@ fun DragDropOverlay(state: DragDropState = LocalDragDrop.current) {
                     alpha = state.alpha
                 }
         ) {
-            state.dragTargetContent?.invoke()
+            state.dragTargetSnapshot?.invoke(this)
         }
     }
 }

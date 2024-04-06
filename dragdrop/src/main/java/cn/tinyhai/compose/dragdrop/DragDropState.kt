@@ -1,14 +1,15 @@
 package cn.tinyhai.compose.dragdrop
 
-import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.util.fastForEachReversed
 import cn.tinyhai.compose.dragdrop.helper.AnimatedDragDropHelper
 import cn.tinyhai.compose.dragdrop.helper.DragDropHelper
 import cn.tinyhai.compose.dragdrop.helper.SimpleDragDropHelper
@@ -23,14 +24,16 @@ sealed interface DragType {
 }
 
 interface DragTargetInfo {
-    // set to true when dragTarget is dragging, set to false when drag end or cancel.
-    // it must be true while animation is running
+
     val isDragging: Boolean
+    val isAnimationRunning: Boolean
+    val isActive get() = isDragging || isAnimationRunning
+
     // the dragOffset in DragDropBox
     val dragOffset: Offset
-    val dragTargetContent: (@Composable () -> Unit)?
+    val dragTargetSnapshot: (DrawScope.() -> Unit)?
     val dragTargetBoundInBox: Rect
-    val dataToDrop: Any?
+    val dataToDrop: DataToDrop<Any?>?
 
     val scaleX: Float
     val scaleY: Float
@@ -45,16 +48,18 @@ internal open class SimpleDragTargetInfo(
     override val dragType: DragType,
 ) : DragTargetInfo {
     override var isDragging by mutableStateOf(false)
+    override var isAnimationRunning by mutableStateOf(false)
     override var dragOffset by mutableStateOf(Offset.Zero)
     override var dragTargetBoundInBox by mutableStateOf(Rect.Zero)
-    override var dragTargetContent by mutableStateOf<(@Composable () -> Unit)?>(null)
-    override var dataToDrop by mutableStateOf<Any?>(null)
+    override var dragTargetSnapshot by mutableStateOf<(DrawScope.() -> Unit)?>(null)
+    override var dataToDrop by mutableStateOf<DataToDrop<Any?>?>(null)
 
     open fun reset() {
         isDragging = false
+        isAnimationRunning = false
         dragOffset = Offset.Zero
         dragTargetBoundInBox = Rect.Zero
-        dragTargetContent = null
+        dragTargetSnapshot = null
         dataToDrop = null
     }
 }
@@ -148,15 +153,15 @@ class DragDropState private constructor(
     private val dropTargetCallbacks: MutableList<DropTargetCallback<Any?>> = arrayListOf()
     private val dragTargetCallbacks: MutableList<DragTargetCallback<Any?>> = arrayListOf()
 
-    private var tmpDragTarget: DragTargetCallback<Any?>? = null
+    private var tmpDragTarget: DragTargetCallback<*>? = null
 
     internal val nestedScrollConnection = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-            return if (isDragging || tmpDragTarget != null) available else Offset.Zero
+            return if (isActive || tmpDragTarget != null) available else Offset.Zero
         }
 
         override suspend fun onPreFling(available: Velocity): Velocity {
-            return if (isDragging || tmpDragTarget != null) available else Velocity.Zero
+            return if (isActive || tmpDragTarget != null) available else Velocity.Zero
         }
     }
 
@@ -176,8 +181,8 @@ class DragDropState private constructor(
         helper.handleDragStart(
             dragTarget.dataToDrop,
             dragStartOffset,
-            dragTarget.boundInBox,
-            dragTarget.content
+            dragTarget.snapshot,
+            dragTarget.boundInBox
         )
         dragTarget.onDragStart()
     }
@@ -185,20 +190,40 @@ class DragDropState private constructor(
     internal fun onDrag(dragOffset: Offset) {
         helper.handleDrag(dragOffset)
 
-        val lastCallback = dropTargetCallbacks.lastOrNull { it.isInBound }
-        val dragPosition = helper.currentDragOffset()
-        val newCallback = dropTargetCallbacks.lastOrNull { it.contains(dragPosition) }
-        if (lastCallback !== newCallback) {
-            lastCallback?.onDragOut()
-            newCallback?.onDragIn(dataToDrop)
+        dataToDrop?.let { dataToDrop ->
+            val lastCallback = lastInBoundDropTarget()
+            val dragPosition = helper.currentDragOffset()
+            val newCallback = findDropTarget(dragPosition, dataToDrop)
+            if (lastCallback !== newCallback) {
+                lastCallback?.onDragOut()
+                newCallback?.onDragIn(dataToDrop)
+            }
         }
     }
 
+    private fun lastInBoundDropTarget(): DropTargetCallback<Any?>? {
+        return dropTargetCallbacks.lastOrNull { it.isInBound }
+    }
+
+    private fun findDropTarget(
+        position: Offset,
+        dataToDrop: DataToDrop<*>
+    ): DropTargetCallback<Any?>? {
+        dropTargetCallbacks.fastForEachReversed {
+            if (it.isInterest(position, dataToDrop)) {
+                return it
+            }
+        }
+        return null
+    }
+
     internal fun onDragEnd() {
-        dropTargetCallbacks.lastOrNull { it.isInBound }?.let {
-            it.onDrop(dataToDrop)
-            helper.handleDragEnd()
-        } ?: return onDragCancel()
+        dataToDrop?.let { dataToDrop ->
+            lastInBoundDropTarget()?.let { dropTarget ->
+                dropTarget.onDrop(dataToDrop)
+                helper.handleDragEnd()
+            }
+        }  ?: return onDragCancel()
 
         reset()
     }

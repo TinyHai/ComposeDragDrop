@@ -1,19 +1,24 @@
 package cn.tinyhai.compose.dragdrop
 
+import android.graphics.Picture
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import cn.tinyhai.compose.dragdrop.modifier.dragTarget
 
 private const val TAG = "DragTarget"
 
 interface DragTargetCallback<T> {
-    val dataToDrop: T?
+    val dataToDrop: DataToDrop<T>
     val boundInBox: Rect
 
-    val content: @Composable () -> Unit
+    val snapshot: DrawScope.() -> Unit
+
     fun contains(position: Offset): Boolean
 
     fun onDragStart()
@@ -24,13 +29,20 @@ interface DragTargetCallback<T> {
 }
 
 class DragTargetState<T>(
-    override var dataToDrop: T?,
-    override val content: @Composable () -> Unit,
+    override val dataToDrop: DataToDrop<T>,
 ) : DragTargetCallback<T> {
 
     var isDragging: Boolean by mutableStateOf(false)
 
     override var boundInBox: Rect = Rect.Zero
+
+    var picture: Picture? = null
+
+    override val snapshot: DrawScope.() -> Unit = {
+        picture?.let {
+            drawIntoCanvas { canvas -> canvas.nativeCanvas.drawPicture(it) }
+        }
+    }
 
     override fun onDragStart() {
         isDragging = true
@@ -55,39 +67,75 @@ class DragTargetState<T>(
 
 @Composable
 fun <T> rememberDragTargetState(
-    dataToDrop: T?,
-    draggableContent: @Composable () -> Unit
+    type: Class<T>,
+    dataToDrop: T?
 ): DragTargetState<T> {
-    return remember(dataToDrop, draggableContent) {
-        DragTargetState(dataToDrop, draggableContent)
+    return rememberDragTargetState(type, dataProvider = { dataToDrop })
+}
+
+@Composable
+inline fun <reified T> rememberDragTargetState(
+    dataToDrop: T?,
+): DragTargetState<T> {
+    return rememberDragTargetState(T::class.java, dataToDrop)
+}
+
+@Composable
+inline fun <reified T> rememberDragTargetState(
+    noinline dataProvider: () -> T?
+): DragTargetState<T> {
+    return rememberDragTargetState(T::class.java, dataProvider)
+}
+
+@Composable
+fun <T> rememberDragTargetState(
+    type: Class<T>,
+    dataProvider: () -> T?,
+): DragTargetState<T> {
+    val currentDataProvider by rememberUpdatedState(dataProvider)
+    val wrapper = remember {
+        DataToDropWrapper(type) { currentDataProvider() }
+    }
+    return remember(wrapper) {
+        DragTargetState(wrapper)
+    }
+}
+
+@Composable
+inline fun <reified T> DragTarget(
+    dataToDrop: T?,
+    modifier: Modifier = Modifier,
+    enable: Boolean = true,
+    hiddenWhileDragging: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    val state = rememberDragTargetState(dataToDrop)
+    Box(
+        modifier = modifier
+            .dragTarget(
+                enable = enable,
+                state = state,
+                hiddenWhileDragging = hiddenWhileDragging,
+            )
+    ) {
+        content()
     }
 }
 
 @Composable
 fun <T> DragTarget(
-    dataToDrop: T?,
+    state: DragTargetState<T>,
     modifier: Modifier = Modifier,
     enable: Boolean = true,
-    hiddenOnDragging: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val state = rememberDragTargetState(dataToDrop, content)
     Box(
         modifier = modifier
             .dragTarget(
+                state = state,
                 enable = enable,
-                state = state
             )
     ) {
-        val dragDropState = LocalDragDrop.current
-        when {
-            hiddenOnDragging && dragDropState.isDragging -> {
-                if (!state.isDragging) {
-                    content()
-                }
-            }
-
-            else -> content()
-        }
+        content()
     }
 }

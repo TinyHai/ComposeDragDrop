@@ -11,79 +11,100 @@ import cn.tinyhai.compose.dragdrop.modifier.dropTarget
 private const val TAG = "DropTarget"
 
 interface DropTargetCallback<T> {
+
     val isInBound: Boolean
 
-    fun contains(dragPosition: Offset): Boolean
+    fun isInterest(dragPosition: Offset, dataToDrop: DataToDrop<*>): Boolean
 
-    fun onDragIn(dataToDrop: T)
+    fun onDragIn(dataToDrop: DataToDrop<T>)
 
     fun onDragOut()
 
-    fun onDrop(dataToDrop: T)
+    fun onDrop(dataToDrop: DataToDrop<T>)
 
     fun onReset()
 }
 
 class DropTargetState<T>(
+    private val type: Class<T>,
     private val onDrop: ((T?) -> Unit)?,
 ) : DropTargetCallback<T> {
+
     var boundInBox: Rect = Rect.Zero
     override var isInBound by mutableStateOf(false)
         private set
-    var dataToDrop by mutableStateOf<T?>(null)
-        private set
+    var dataProvider: (() -> T?)? = null
 
-    override fun contains(dragPosition: Offset): Boolean {
-        return boundInBox.contains(dragPosition)
+    override fun isInterest(dragPosition: Offset, dataToDrop: DataToDrop<*>): Boolean {
+        return boundInBox.contains(dragPosition) && type.isAssignableFrom(dataToDrop.type)
     }
 
     override fun onDragOut() {
         isInBound = false
-        this.dataToDrop = null
+        dataProvider = null
     }
 
     override fun onReset() {
         isInBound = false
-        dataToDrop = null
+        dataProvider = null
     }
 
-    override fun onDrop(dataToDrop: T) {
-        if (dataToDrop == this.dataToDrop) {
-            onDrop?.invoke(dataToDrop)
+    override fun onDrop(dataToDrop: DataToDrop<T>) {
+        if (type.isAssignableFrom(dataToDrop.type)) {
+            onDrop?.invoke(dataToDrop.data())
         }
     }
 
-    override fun onDragIn(dataToDrop: T) {
-        isInBound = true
-        this.dataToDrop = dataToDrop
+    override fun onDragIn(dataToDrop: DataToDrop<T>) {
+        if (type.isAssignableFrom(dataToDrop.type)) {
+            isInBound = true
+            dataProvider = { dataToDrop.data() }
+        }
     }
 
     operator fun component1() = isInBound
 
-    operator fun component2() = dataToDrop
+    operator fun component2() = dataProvider?.invoke()
 
     override fun toString(): String {
-        return "DropTargetState(isInBound=$isInBound, dataToDrop=$dataToDrop)"
+        return "DropTargetState(isInBound=$isInBound, dataToDrop=${dataProvider?.invoke()})"
     }
 }
 
 @Composable
-fun <T> rememberDropTargetState(onDrop: (T?) -> Unit): DropTargetState<T> {
+inline fun <reified T> rememberDropTargetState(noinline onDrop: (T?) -> Unit): DropTargetState<T> {
+    return rememberDropTargetState(T::class.java, onDrop)
+}
+
+@Composable
+fun <T> rememberDropTargetState(type: Class<T>, onDrop: (T?) -> Unit): DropTargetState<T> {
     val curOnDrop by rememberUpdatedState(newValue = onDrop)
-    return remember {
-        DropTargetState { curOnDrop(it) }
+    return remember(type) {
+        DropTargetState(type) { curOnDrop(it) }
+    }
+}
+
+@Composable
+inline fun <reified T> DropTarget(
+    noinline onDrop: (T?) -> Unit,
+    modifier: Modifier = Modifier,
+    enable: Boolean = true,
+    content: @Composable BoxScope.(isInBound: Boolean, data: T?) -> Unit
+) {
+    val state = rememberDropTargetState(onDrop)
+    Box(modifier = modifier.dropTarget(state, enable)) {
+        content(state.isInBound, state.dataProvider?.invoke())
     }
 }
 
 @Composable
 fun <T> DropTarget(
-    onDrop: (T?) -> Unit,
+    state: DropTargetState<T>,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    dropTargetState: DropTargetState<T> = rememberDropTargetState(onDrop),
-    content: @Composable BoxScope.(isInBound: Boolean, data: T?) -> Unit
+    enable: Boolean = true,
+    content: BoxScope.(isInBound: Boolean, data: T?) -> Unit
 ) {
-    Box(modifier = modifier.dropTarget(dropTargetState, enabled)) {
-        content(dropTargetState.isInBound, dropTargetState.dataToDrop)
+    Box(modifier = modifier.dropTarget(state, enable)) {
+        content(state.isInBound, state.dataProvider?.invoke())
     }
 }

@@ -1,16 +1,16 @@
 package cn.tinyhai.compose.dragdrop.helper
 
-import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationEndReason
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.center
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import cn.tinyhai.compose.dragdrop.AnimatedDragTargetInfo
+import cn.tinyhai.compose.dragdrop.DataToDrop
 import cn.tinyhai.compose.dragdrop.SimpleDragTargetInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collectLatest
@@ -20,11 +20,12 @@ private const val TAG = "DragDropHelper"
 
 interface DragDropHelper {
     fun handleDragStart(
-        dataToDrop: Any?,
+        dataToDrop: DataToDrop<Any?>,
         dragStartOffset: Offset,
+        dragTargetSnapshot: DrawScope.() -> Unit,
         dragTargetBoundInBox: Rect,
-        content: @Composable () -> Unit
     )
+
     fun handleDrag(dragOffset: Offset)
     fun handleDragEnd()
     fun handleDragCancel(reset: () -> Unit)
@@ -37,16 +38,16 @@ internal open class SimpleDragDropHelper(
 ) : DragDropHelper {
 
     override fun handleDragStart(
-        dataToDrop: Any?,
+        dataToDrop: DataToDrop<Any?>,
         dragStartOffset: Offset,
+        dragTargetSnapshot: DrawScope.() -> Unit,
         dragTargetBoundInBox: Rect,
-        content: @Composable () -> Unit
     ) {
         state.apply {
             isDragging = true
             dragOffset = dragStartOffset
             this.dataToDrop = dataToDrop
-            dragTargetContent = content
+            this.dragTargetSnapshot = dragTargetSnapshot
             this.dragTargetBoundInBox = dragTargetBoundInBox
         }
     }
@@ -90,6 +91,9 @@ internal class AnimatedDragDropHelper(
         scope.launch {
             snapshotFlow { animatable.value }.collectLatest { state.animatableValue = it }
         }
+        scope.launch {
+            snapshotFlow { animatable.isRunning }.collectLatest { state.isAnimationRunning = it }
+        }
     }
 
     private fun startDragStartAnimation() {
@@ -103,9 +107,7 @@ internal class AnimatedDragDropHelper(
     private fun startDragCancelAnimation(onFinish: () -> Unit) {
         scope.launch {
             animatable.apply {
-                val result = animateTo(0f, endSpec) {
-                    state.animatableValue = value
-                }
+                val result = animateTo(0f, endSpec)
                 if (result.endReason == AnimationEndReason.Finished) {
                     onFinish()
                 }
@@ -124,13 +126,13 @@ internal class AnimatedDragDropHelper(
     }
 
     override fun handleDragStart(
-        dataToDrop: Any?,
+        dataToDrop: DataToDrop<Any?>,
         dragStartOffset: Offset,
+        dragTargetSnapshot: DrawScope.() -> Unit,
         dragTargetBoundInBox: Rect,
-        content: @Composable () -> Unit
     ) {
         stopAnimation(false) // when we drag the same dragTarget, just stop it but dont snap to zero
-        super.handleDragStart(dataToDrop, dragStartOffset, dragTargetBoundInBox, content)
+        super.handleDragStart(dataToDrop, dragStartOffset, dragTargetSnapshot, dragTargetBoundInBox)
         startDragStartAnimation()
     }
 
@@ -140,15 +142,15 @@ internal class AnimatedDragDropHelper(
     }
 
     override fun handleDragCancel(reset: () -> Unit) {
+        state.isDragging = false
         startDragCancelAnimation {
             super.handleDragCancel(reset)
         }
     }
 
     override fun calculateTargetOffset(): Offset {
-        if (animatable.isRunning) {
+        if (state.isAnimationRunning) {
             val offset = super.calculateTargetOffset() - state.dragTargetBoundInBox.topLeft
-            Log.d(TAG, offset.toString())
             return state.dragTargetBoundInBox.topLeft + offset * currentAnimatedValue()
         }
         return super.calculateTargetOffset()

@@ -54,14 +54,7 @@ AnimatedDragDropBox(/* ... */) {
 
 Wrap your `@Composable` content that you want to make draggable with `DragTarget`
 ```kotlin
-DragTarget<String>(
-    dataToDrop = "dataToDrop",
-    dragType = DragType.Immediate, // Specify a dragType for this one
-                                   // By default,it will be assigned to the defaultDragType you set earlier
-    hiddenOnDragging = true, // if true, content will be hidden when the target is being dragging
-) {
-    // put your draggable content here
-}
+Modifier.dragTarget()
 ```
 
 Wrap your `@Composable` content that you want to make droppable with `DropTarget`
