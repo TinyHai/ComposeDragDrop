@@ -24,7 +24,7 @@ jobs:
 
         # Runs upload, and then closes & releases the repository
       - name: Publish to MavenCentral
-        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
+        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache -PRELEASE_SIGNING_ENABLED=true
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.OSS_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.OSS_PASSWORD }}
