@@ -53,11 +53,18 @@ AnimatedDragDropBox(/* ... */) {
 ```
 
 Wrap your `@Composable` content that you want to make draggable with `DragTarget`
+Or simple add dragTarget Modifier
 ```kotlin
-Modifier.dragTarget()
+DragTarget<String>(dataToDrop) {
+    // your content
+}
+// or
+val state = rememberDragTargetState(dataToDrop)
+Modifier.dragTarget(state) // apply it to your composable
 ```
 
 Wrap your `@Composable` content that you want to make droppable with `DropTarget`
+Or simple add dropTarget Modifier
 ```kotlin
 DropTarget<String>(
     onDrop = {
@@ -71,7 +78,7 @@ val state = rememberDropTargetState { dataToDrop ->
     // do something
 }
 val (isInBound, dataToDrop) = state
-// apply Modifier.dropTarget(state) to your composable
+Modifier.dropTarget(state) // apply it to your composable
 ```
 
 After all of above, make sure your content is structured as follows
