@@ -5,14 +5,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.round
 import cn.tinyhai.compose.dragdrop.modifier.attachAsContainer
 
@@ -72,8 +71,12 @@ fun DragDropBox(
 @Composable
 fun DragDropOverlay(state: DragDropState = LocalDragDrop.current) {
     if (state.isActive) {
+        val size = with(LocalDensity.current) {
+            state.dragTargetBoundInBox.size.toDpSize()
+        }
         Canvas(
             modifier = Modifier
+                .size(size)
                 .absoluteOffset {
                     state
                         .currentOverlayOffset()

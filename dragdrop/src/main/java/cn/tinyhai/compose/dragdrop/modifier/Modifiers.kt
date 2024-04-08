@@ -8,14 +8,18 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.node.DrawModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidateDraw
+import androidx.compose.ui.platform.InspectorInfo
 import cn.tinyhai.compose.dragdrop.*
 
 private const val TAG = "Modifiers"
@@ -118,21 +122,58 @@ fun <T> Modifier.dragTarget(
 
         this
             .then(alphaModifier)
-            .drawWithCache {
-                val picture = Picture()
-                onDrawWithContent {
-                    val canvas =
-                        Canvas(picture.beginRecording(size.width.toInt(), size.height.toInt()))
-                    draw(this, layoutDirection, canvas, size) {
-                        this@onDrawWithContent.drawContent()
-                    }
-                    picture.endRecording()
-                    state.picture = picture
-                    drawIntoCanvas { it.nativeCanvas.drawPicture(picture) }
+            .then(
+                DragTargetDrawModifierElement {
+                    state.picture = it
                 }
-            }
+            )
             .onGloballyPositioned {
                 state.boundInBox = dragDropState.calculateBoundInBox(it, clipBounds = false)
             }
+    }
+}
+
+private data class DragTargetDrawModifierElement(
+    private val onPictureCreate: (Picture) -> Unit
+) : ModifierNodeElement<DragTargetDrawModifier>() {
+    override fun create(): DragTargetDrawModifier {
+        return DragTargetDrawModifier(onPictureCreate)
+    }
+
+    override fun update(node: DragTargetDrawModifier) {
+        node.onPictureCreate = this.onPictureCreate
+    }
+
+    override fun InspectorInfo.inspectableProperties() {
+        properties["onPictureCreate"] = onPictureCreate
+    }
+}
+
+private class DragTargetDrawModifier(
+    onPictureCreate: (Picture) -> Unit
+) : Modifier.Node(), DrawModifierNode {
+
+    var onPictureCreate: (Picture) -> Unit = onPictureCreate
+        set(value) {
+            field = value
+            picture = null
+            invalidateDraw()
+        }
+
+    private var picture: Picture? = null
+
+    private fun getOrCreatePicture(): Picture {
+        return picture ?: Picture().also { picture = it }.also { onPictureCreate(it) }
+    }
+
+    override fun ContentDrawScope.draw() {
+        val picture = getOrCreatePicture()
+        val drawScope = this
+        val pictureCanvas = Canvas(picture.beginRecording(size.width.toInt(), size.height.toInt()))
+        draw(drawScope, layoutDirection, pictureCanvas, size) {
+            drawScope.drawContent()
+        }
+        picture.endRecording()
+        drawIntoCanvas { canvas -> canvas.nativeCanvas.drawPicture(picture) }
     }
 }
