@@ -210,7 +210,7 @@ class DragDropState private constructor(
         dataToDrop: DataToDrop<*>
     ): DropTargetCallback<Any?>? {
         dropTargetCallbacks.fastForEachReversed {
-            if (it.isInterest(position, dataToDrop)) {
+            if (it.contains(position) && it.isInterest(dataToDrop)) {
                 return it
             }
         }
@@ -223,7 +223,7 @@ class DragDropState private constructor(
                 dropTarget.onDrop(dataToDrop)
                 helper.handleDragEnd()
             }
-        }  ?: return onDragCancel()
+        } ?: return onDragCancel()
 
         reset()
     }
@@ -238,7 +238,9 @@ class DragDropState private constructor(
     }
 
     internal fun unregisterDropTarget(dropTargetCallback: DropTargetCallback<*>) {
-        dropTargetCallbacks.remove(dropTargetCallback)
+        if (dropTargetCallbacks.remove(dropTargetCallback)) {
+            dropTargetCallback.onReset()
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -247,7 +249,9 @@ class DragDropState private constructor(
     }
 
     internal fun unregisterDragTarget(dragTargetCallback: DragTargetCallback<*>) {
-        dragTargetCallbacks.remove(dragTargetCallback)
+        if (dragTargetCallbacks.remove(dragTargetCallback)) {
+            dragTargetCallback.onReset()
+        }
     }
 
     fun calculateBoundInBox(

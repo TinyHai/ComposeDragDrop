@@ -14,7 +14,9 @@ interface DropTargetCallback<T> {
 
     val isInBound: Boolean
 
-    fun isInterest(dragPosition: Offset, dataToDrop: DataToDrop<*>): Boolean
+    fun isInterest(dataToDrop: DataToDrop<*>): Boolean
+
+    fun contains(position: Offset): Boolean
 
     fun onDragIn(dataToDrop: DataToDrop<T>)
 
@@ -33,10 +35,15 @@ class DropTargetState<T>(
     var boundInBox: Rect = Rect.Zero
     override var isInBound by mutableStateOf(false)
         private set
+
     var dataProvider: (() -> T?)? = null
 
-    override fun isInterest(dragPosition: Offset, dataToDrop: DataToDrop<*>): Boolean {
-        return boundInBox.contains(dragPosition) && type.isAssignableFrom(dataToDrop.type)
+    override fun isInterest(dataToDrop: DataToDrop<*>): Boolean {
+        return type.isAssignableFrom(dataToDrop.type)
+    }
+
+    override fun contains(position: Offset): Boolean {
+        return boundInBox.contains(position)
     }
 
     override fun onDragOut() {

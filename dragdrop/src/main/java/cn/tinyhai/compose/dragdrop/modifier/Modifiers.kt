@@ -4,7 +4,6 @@ import android.graphics.Picture
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
@@ -64,20 +63,15 @@ fun <T> Modifier.dropTarget(
     state: DropTargetState<T>,
     enable: Boolean = true,
 ) = composed {
+    val dragDropState = LocalDragDrop.current
     if (enable) {
-        val dragDropState = LocalDragDrop.current
         RegisterDropTarget(state)
-
-        this
-            .onGloballyPositioned {
-                state.boundInBox = dragDropState.calculateBoundInBox(it)
-            }
-    } else {
-        SideEffect {
-            state.onReset()
-        }
-        Modifier
     }
+
+    this
+        .onGloballyPositioned {
+            state.boundInBox = dragDropState.calculateBoundInBox(it)
+        }
 }
 
 @Composable
@@ -111,26 +105,24 @@ fun <T> Modifier.dragTarget(
     enable: Boolean = true,
     hiddenWhileDragging: Boolean = false
 ) = composed {
-    if (!enable) {
-        Modifier
-    } else {
-        val dragDropState = LocalDragDrop.current
+    val dragDropState = LocalDragDrop.current
+    if (enable) {
         RegisterDragTarget(dragTargetState = state)
-
-        val alphaModifier =
-            if (hiddenWhileDragging && state.isDragging) Modifier.alpha(0f) else Modifier
-
-        this
-            .then(alphaModifier)
-            .then(
-                DragTargetDrawModifierElement {
-                    state.picture = it
-                }
-            )
-            .onGloballyPositioned {
-                state.boundInBox = dragDropState.calculateBoundInBox(it, clipBounds = false)
-            }
     }
+
+    val alphaModifier =
+        if (hiddenWhileDragging && state.isDragging) Modifier.alpha(0f) else Modifier
+
+    this
+        .then(alphaModifier)
+        .then(
+            DragTargetDrawModifierElement {
+                state.picture = it
+            }
+        )
+        .onGloballyPositioned {
+            state.boundInBox = dragDropState.calculateBoundInBox(it, clipBounds = false)
+        }
 }
 
 private data class DragTargetDrawModifierElement(
